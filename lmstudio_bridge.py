@@ -3,6 +3,7 @@ from mcp.server.fastmcp import FastMCP
 import requests
 import json
 import sys
+import os
 from typing import List, Dict, Any, Optional
 
 # Initialize FastMCP server
@@ -11,6 +12,16 @@ mcp = FastMCP("lmstudio-bridge")
 # LM Studio settings
 LMSTUDIO_API_BASE = "http://localhost:1234/v1"
 DEFAULT_MODEL = "default"  # Will be replaced with whatever model is currently loaded
+
+def get_auth_headers() -> Dict[str, str]:
+    """Get authorization headers for LM Studio API."""
+    token = os.environ.get("LMSTUDIO_API_TOKEN", "")
+    headers = {
+        "Content-Type": "application/json"
+    }
+    if token:
+        headers["Authorization"] = f"Bearer {token}"
+    return headers
 
 def log_error(message: str):
     """Log error messages to stderr for debugging"""
@@ -28,7 +39,7 @@ async def health_check() -> str:
         A message indicating whether the LM Studio API is running.
     """
     try:
-        response = requests.get(f"{LMSTUDIO_API_BASE}/models")
+        response = requests.get(f"{LMSTUDIO_API_BASE}/models", headers=get_auth_headers())
         if response.status_code == 200:
             return "LM Studio API is running and accessible."
         else:
@@ -44,7 +55,7 @@ async def list_models() -> str:
         A formatted list of available models.
     """
     try:
-        response = requests.get(f"{LMSTUDIO_API_BASE}/models")
+        response = requests.get(f"{LMSTUDIO_API_BASE}/models", headers=get_auth_headers())
         if response.status_code != 200:
             return f"Failed to fetch models. Status code: {response.status_code}"
         
@@ -73,6 +84,7 @@ async def get_current_model() -> str:
         # We'll check which model responds to a simple completion request
         response = requests.post(
             f"{LMSTUDIO_API_BASE}/chat/completions",
+            headers=get_auth_headers(),
             json={
                 "messages": [{"role": "system", "content": "What model are you?"}],
                 "temperature": 0.7,
@@ -117,6 +129,7 @@ async def chat_completion(prompt: str, system_prompt: str = "", temperature: flo
         
         response = requests.post(
             f"{LMSTUDIO_API_BASE}/chat/completions",
+            headers=get_auth_headers(),
             json={
                 "messages": messages,
                 "temperature": temperature,
