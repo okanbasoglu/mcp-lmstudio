@@ -13,9 +13,9 @@ install:
 	go mod download
 	go mod tidy
 
-# Test the server (requires LM Studio running)
+# Run the test client (built-in handshake and tool calls)
 test: build
-	./mcp-lmstudio
+	go run cmd/test-client/main.go
 
 # Clean up binaries and logs
 clean:
