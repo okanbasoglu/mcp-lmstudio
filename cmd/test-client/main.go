@@ -190,13 +190,17 @@ func main() {
 		}
 	}
 
-	// 6. Step 5: Call tool (get_current_model)
+	// 6. Step 5: Call tool (chat)
 	send(map[string]any{
 		"jsonrpc": "2.0",
 		"method":  "tools/call",
 		"params": map[string]any{
-			"name":      "get_current_model",
-			"arguments": map[string]any{},
+			"name": "chat",
+			"arguments": map[string]any{
+				"prompt":      "What is 2+2? Answer in one sentence.",
+				"temperature": 0.7,
+				"max_tokens":  50,
+			},
 		},
 		"id": 4,
 	})
@@ -205,42 +209,11 @@ func main() {
 	for {
 		resp := receive()
 		if resp["id"] == float64(4) {
-			if checkError(resp, "get_current_model") {
+			if checkError(resp, "chat") {
 				break
 			}
-			if checkResult(resp, "get_current_model") {
-				fmt.Println("\n✅ SUCCESS! get_current_model passed.")
-				result, _ := json.MarshalIndent(resp["result"], "", "  ")
-				fmt.Println(string(result))
-			}
-			break
-		}
-	}
-
-	// 7. Step 6: Call tool (chat_completion)
-	send(map[string]any{
-		"jsonrpc": "2.0",
-		"method":  "tools/call",
-		"params": map[string]any{
-			"name": "chat_completion",
-			"arguments": map[string]any{
-				"prompt":      "What is 2+2? Answer in one sentence.",
-				"temperature": 0.7,
-				"max_tokens":  50,
-			},
-		},
-		"id": 5,
-	})
-
-	// Wait for tool result
-	for {
-		resp := receive()
-		if resp["id"] == float64(5) {
-			if checkError(resp, "chat_completion") {
-				break
-			}
-			if checkResult(resp, "chat_completion") {
-				fmt.Println("\n✅ SUCCESS! chat_completion passed.")
+			if checkResult(resp, "chat") {
+				fmt.Println("\n✅ SUCCESS! chat passed.")
 				result, _ := json.MarshalIndent(resp["result"], "", "  ")
 				fmt.Println(string(result))
 			}
