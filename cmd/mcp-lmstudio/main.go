@@ -449,25 +449,16 @@ func main() {
 			}, nil, nil
 		}
 
-		// Build the output text from all output items
+		// Build the output text from only "message" type output items
 		var outputText string
-		for i, item := range chatResp.Output {
-			if i > 0 {
-				outputText += "\n\n"
-			}
-
-			switch item.Type {
-			case "message":
+		first := true
+		for _, item := range chatResp.Output {
+			if item.Type == "message" {
+				if !first {
+					outputText += "\n\n"
+				}
 				outputText += item.Content
-			case "tool_call":
-				outputText += fmt.Sprintf("[Tool Call: %s]\nArguments: %s\nOutput: %s",
-					item.Tool, string(item.Arguments), item.Output)
-			case "reasoning":
-				outputText += fmt.Sprintf("[Reasoning]\n%s", item.Content)
-			case "invalid_tool_call":
-				outputText += fmt.Sprintf("[Invalid Tool Call]\nReason: %s", item.Reason)
-			default:
-				outputText += fmt.Sprintf("[Unknown output type: %s]", item.Type)
+				first = false
 			}
 		}
 
