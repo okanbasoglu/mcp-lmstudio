@@ -21,10 +21,47 @@ const (
 	LogFilePath     = "lmstudio_audit.log"
 )
 
+type Quantization struct {
+	Name           string  `json:"name"`
+	BitsPerWeight  float64 `json:"bits_per_weight"`
+}
+
+type LoadedInstanceConfig struct {
+	ContextLength        int  `json:"context_length"`
+	EvalBatchSize        *int `json:"eval_batch_size,omitempty"`
+	FlashAttention       *bool `json:"flash_attention,omitempty"`
+	NumExperts           *int `json:"num_experts,omitempty"`
+	OffloadKVCacheToGPU  *bool `json:"offload_kv_cache_to_gpu,omitempty"`
+}
+
+type LoadedInstance struct {
+	ID     string               `json:"id"`
+	Config LoadedInstanceConfig `json:"config"`
+}
+
+type Capabilities struct {
+	Vision            bool `json:"vision"`
+	TrainedForToolUse bool `json:"trained_for_tool_use"`
+}
+
+type Model struct {
+	Type             string           `json:"type"`
+	Publisher        string           `json:"publisher"`
+	Key              string           `json:"key"`
+	DisplayName      string           `json:"display_name"`
+	Architecture     *string          `json:"architecture,omitempty"`
+	Quantization     *Quantization    `json:"quantization"`
+	SizeBytes        int64            `json:"size_bytes"`
+	ParamsString     *string          `json:"params_string"`
+	LoadedInstances  []LoadedInstance `json:"loaded_instances"`
+	MaxContextLength int              `json:"max_context_length"`
+	Format           *string          `json:"format"`
+	Capabilities     *Capabilities    `json:"capabilities,omitempty"`
+	Description      *string          `json:"description,omitempty"`
+}
+
 type ModelsResponse struct {
-	Data []struct {
-		ID string `json:"id"`
-	} `json:"data"`
+	Models []Model `json:"models"`
 }
 
 type Integration struct {
@@ -46,9 +83,22 @@ type Message struct {
 	Content string `json:"content"`
 }
 
+type OutputItem struct {
+	Type         string          `json:"type"`
+	Content      string          `json:"content,omitempty"`
+	Tool         string          `json:"tool,omitempty"`
+	Arguments    json.RawMessage `json:"arguments,omitempty"`
+	Output       string          `json:"output,omitempty"`
+	ProviderInfo json.RawMessage `json:"provider_info,omitempty"`
+	Reason       string          `json:"reason,omitempty"`
+	Metadata     json.RawMessage `json:"metadata,omitempty"`
+}
+
 type ChatCompletionResponse struct {
-	Output string `json:"output"`
-	Model  string `json:"model,omitempty"`
+	Output           []OutputItem `json:"output"`
+	ModelInstanceID  string       `json:"model_instance_id,omitempty"`
+	Stats            json.RawMessage `json:"stats,omitempty"`
+	ResponseID       string       `json:"response_id,omitempty"`
 }
 
 type EmptyArgs struct{}
@@ -144,7 +194,7 @@ func main() {
 		logInfo(logger, "Executing health_check")
 
 		client := &http.Client{Timeout: 10 * time.Second}
-		httpReq, err := http.NewRequestWithContext(ctx, "GET", LMStudioAPIBase+"/v1/models", nil)
+		httpReq, err := http.NewRequestWithContext(ctx, "GET", LMStudioAPIBase+"/api/v1/models", nil)
 		if err != nil {
 			return nil, nil, fmt.Errorf("failed to create request: %w", err)
 		}
@@ -188,7 +238,7 @@ func main() {
 		logInfo(logger, "Executing list_models")
 
 		client := &http.Client{Timeout: 10 * time.Second}
-		httpReq, err := http.NewRequestWithContext(ctx, "GET", LMStudioAPIBase+"/v1/models", nil)
+		httpReq, err := http.NewRequestWithContext(ctx, "GET", LMStudioAPIBase+"/api/v1/models", nil)
 		if err != nil {
 			return nil, nil, fmt.Errorf("failed to create request: %w", err)
 		}
@@ -226,7 +276,7 @@ func main() {
 			return nil, nil, fmt.Errorf("failed to parse response: %w", err)
 		}
 
-		if len(modelsResp.Data) == 0 {
+		if len(modelsResp.Models) == 0 {
 			return &mcp.CallToolResult{
 				Content: []mcp.Content{
 					&mcp.TextContent{
@@ -237,8 +287,48 @@ func main() {
 		}
 
 		result := "Available models in LM Studio:\n\n"
-		for _, model := range modelsResp.Data {
-			result += fmt.Sprintf("- %s\n", model.ID)
+		for _, model := range modelsResp.Models {
+			result += fmt.Sprintf("### %s\n", model.DisplayName)
+			result += fmt.Sprintf("- Type: %s\n", model.Type)
+			result += fmt.Sprintf("- Key: %s\n", model.Key)
+			result += fmt.Sprintf("- Publisher: %s\n", model.Publisher)
+			
+			if model.Architecture != nil {
+				result += fmt.Sprintf("- Architecture: %s\n", *model.Architecture)
+			}
+			
+			if model.ParamsString != nil {
+				result += fmt.Sprintf("- Parameters: %s\n", *model.ParamsString)
+			}
+			
+			if model.Quantization != nil {
+				result += fmt.Sprintf("- Quantization: %s (%.1f bits/weight)\n", 
+					model.Quantization.Name, model.Quantization.BitsPerWeight)
+			}
+			
+			result += fmt.Sprintf("- Size: %.2f MB\n", float64(model.SizeBytes)/(1024*1024))
+			result += fmt.Sprintf("- Max Context Length: %d tokens\n", model.MaxContextLength)
+			
+			if model.Format != nil {
+				result += fmt.Sprintf("- Format: %s\n", *model.Format)
+			}
+			
+			if model.Capabilities != nil {
+				result += fmt.Sprintf("- Vision: %t\n", model.Capabilities.Vision)
+				result += fmt.Sprintf("- Tool Use: %t\n", model.Capabilities.TrainedForToolUse)
+			}
+			
+			if len(model.LoadedInstances) > 0 {
+				result += fmt.Sprintf("- Loaded Instances: %d\n", len(model.LoadedInstances))
+				for _, instance := range model.LoadedInstances {
+					result += fmt.Sprintf("  - Instance ID: %s (context: %d tokens)\n", 
+						instance.ID, instance.Config.ContextLength)
+				}
+			} else {
+				result += "- Status: Not loaded\n"
+			}
+			
+			result += "\n"
 		}
 
 		return &mcp.CallToolResult{
@@ -338,7 +428,39 @@ func main() {
 
 		logInfo(logger, "Received response from LM Studio")
 
-		if chatResp.Output == "" {
+		if len(chatResp.Output) == 0 {
+			return &mcp.CallToolResult{
+				Content: []mcp.Content{
+					&mcp.TextContent{
+						Text: "Error: Empty response from model",
+					},
+				},
+			}, nil, nil
+		}
+
+		// Build the output text from all output items
+		var outputText string
+		for i, item := range chatResp.Output {
+			if i > 0 {
+				outputText += "\n\n"
+			}
+			
+			switch item.Type {
+			case "message":
+				outputText += item.Content
+			case "tool_call":
+				outputText += fmt.Sprintf("[Tool Call: %s]\nArguments: %s\nOutput: %s", 
+					item.Tool, string(item.Arguments), item.Output)
+			case "reasoning":
+				outputText += fmt.Sprintf("[Reasoning]\n%s", item.Content)
+			case "invalid_tool_call":
+				outputText += fmt.Sprintf("[Invalid Tool Call]\nReason: %s", item.Reason)
+			default:
+				outputText += fmt.Sprintf("[Unknown output type: %s]", item.Type)
+			}
+		}
+
+		if outputText == "" {
 			return &mcp.CallToolResult{
 				Content: []mcp.Content{
 					&mcp.TextContent{
@@ -351,7 +473,7 @@ func main() {
 		return &mcp.CallToolResult{
 			Content: []mcp.Content{
 				&mcp.TextContent{
-					Text: chatResp.Output,
+					Text: outputText,
 				},
 			},
 		}, nil, nil

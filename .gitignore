@@ -1,5 +1,6 @@
 # Go-specific files
 /mcp-lmstudio
+/test-client
 *.exe
 *.exe~
 *.dll

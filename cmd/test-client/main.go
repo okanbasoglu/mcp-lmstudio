@@ -197,9 +197,9 @@ func main() {
 		"params": map[string]any{
 			"name": "chat",
 			"arguments": map[string]any{
-				"prompt":      "What is 2+2? Answer in one sentence.",
-				"temperature": 0.7,
-				"max_tokens":  50,
+				"prompt":         "What is 2+2? Answer in one sentence.",
+				"temperature":    0.7,
+				"context_length": 8000,
 			},
 		},
 		"id": 4,
