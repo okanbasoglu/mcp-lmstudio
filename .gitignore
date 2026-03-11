@@ -1,5 +1,5 @@
 # Go-specific files
-mcp-lmstudio
+/mcp-lmstudio
 *.exe
 *.exe~
 *.dll
