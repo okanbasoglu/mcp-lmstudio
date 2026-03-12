@@ -18,7 +18,7 @@ const (
 	ServerName      = "lmstudio-bridge"
 	ServerVersion   = "0.1.0"
 	LMStudioAPIBase = "http://127.0.0.1:1234"
-	LogFilePath     = "lmstudio_audit.log"
+	LogFilePath     = "/tmp/lmstudio_audit.log"
 )
 
 type Quantization struct {
